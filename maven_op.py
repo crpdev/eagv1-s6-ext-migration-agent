@@ -12,10 +12,10 @@ from dotenv import load_dotenv
 from pydantic import BaseModel
 from logger_config import setup_logging, get_logger, log_performance
 
-# Configure logging
+# Setup logging
 setup_logging(
-    log_level="DEBUG",
-    log_file='logs/maven_op.log'
+    log_level=logging.DEBUG,
+    log_file_path='logs/maven_op.log'
 )
 logger = get_logger(__name__)
 

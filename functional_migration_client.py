@@ -18,10 +18,10 @@ from logger_config import setup_logging
 # Load environment variables
 load_dotenv()
 
-# Configure logging
+# Setup logging first
 setup_logging(
-    log_level="INFO",
-    log_file=f"logs/java_migration_client_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+    log_level=logging.INFO,
+    log_file_path=f"logs/java_migration_client_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
 )
 logger = logging.getLogger(__name__)
 

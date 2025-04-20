@@ -6,73 +6,94 @@ import json
 from datetime import datetime
 from typing import Optional, Dict, Any
 
-def setup_logging(log_level: str = "INFO", log_file: Optional[str] = None) -> None:
-    """Set up logging configuration."""
-    # Clean up the log level string and handle comments
-    log_level = log_level.split('#')[0].strip().upper()
+def setup_logging(log_file_path=None, log_level=logging.INFO):
+    """
+    Set up logging configuration with both console and file handlers.
     
-    # Create logs directory if it doesn't exist
-    if log_file:
-        log_dir = os.path.dirname(log_file)
-        if log_dir and not os.path.exists(log_dir):
-            os.makedirs(log_dir)
-    
-    # Configure the root logger
-    root_logger = logging.getLogger()
-    root_logger.setLevel(log_level)
-    
-    class SafeFormatter(logging.Formatter):
-        def format(self, record):
-            if not hasattr(record, 'extra_data'):
-                record.extra_data = ''
-            
-            # Add thread name and process ID
-            thread_info = f"[Thread: {record.threadName}]" if hasattr(record, 'threadName') else ''
-            process_info = f"[PID: {record.process}]" if hasattr(record, 'process') else ''
-            
-            # Add function name if available
-            func_info = f"[{record.funcName}]" if hasattr(record, 'funcName') else ''
-            
-            # Add these to record
-            record.thread_process = f"{thread_info}{process_info}"
-            record.function_info = func_info
-            
-            return super().format(record)
-            
-        def formatException(self, ei):
-            """Enhanced exception formatting."""
-            result = super().formatException(ei)
-            return f"\nException Details:\n{result}"
-    
-    # Create formatters
-    detailed_formatter = SafeFormatter(
-        '%(asctime)s | %(levelname)-8s | %(name)s:%(lineno)s %(thread_process)s %(function_info)s | %(message)s%(extra_data)s',
-        datefmt='%Y-%m-%d %H:%M:%S.%f'
-    )
-    simple_formatter = SafeFormatter(
-        '%(levelname)-8s | %(name)s | %(message)s'
-    )
-    
-    # Set up console handler with UTF-8 encoding
-    if sys.platform == 'win32':
+    Args:
+        log_file_path (str): Path to the log file. If None, uses default path.
+        log_level (int): Logging level to use. Defaults to INFO.
+    """
+    try:
+        # Create logs directory if it doesn't exist
+        if log_file_path is None:
+            log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'logs')
+            os.makedirs(log_dir, exist_ok=True)
+            log_file_path = os.path.join(log_dir, f'app_{datetime.now().strftime("%Y%m%d")}.log')
+        
+        # Create formatters
+        formatter = SafeFormatter(
+            '%(asctime)s | %(levelname)s | %(thread_process)s%(function_info)s | %(message)s%(extra_data)s'
+        )
+        
+        # Configure root logger
+        root_logger = logging.getLogger()
+        root_logger.setLevel(log_level)
+        
+        # Remove existing handlers to prevent duplicate logging
+        for handler in root_logger.handlers[:]:
+            root_logger.removeHandler(handler)
+        
+        # Console Handler
         console_handler = logging.StreamHandler(sys.stdout)
-    else:
-        console_handler = logging.StreamHandler()
-    
-    console_handler.setFormatter(simple_formatter)
-    root_logger.addHandler(console_handler)
-    
-    # Set up file handler if log file is specified
-    if log_file:
-        # Use RotatingFileHandler instead of FileHandler
+        console_handler.setFormatter(formatter)
+        console_handler.setLevel(log_level)
+        root_logger.addHandler(console_handler)
+        
+        # File Handler
         file_handler = logging.handlers.RotatingFileHandler(
-            log_file,
+            log_file_path,
             maxBytes=10*1024*1024,  # 10MB
             backupCount=5,
             encoding='utf-8'
         )
-        file_handler.setFormatter(detailed_formatter)
+        file_handler.setFormatter(formatter)
+        file_handler.setLevel(log_level)
         root_logger.addHandler(file_handler)
+        
+        # Log startup message
+        root_logger.info(f"Logging initialized. Log file: {log_file_path}")
+        
+    except Exception as e:
+        # Ensure basic logging is available even if setup fails
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s | %(levelname)s | %(message)s',
+            handlers=[logging.StreamHandler(sys.stdout)]
+        )
+        logging.error(f"Failed to setup logging: {str(e)}")
+        raise
+
+class SafeFormatter(logging.Formatter):
+    def format(self, record):
+        # Ensure extra_data exists and is properly formatted
+        if not hasattr(record, 'extra_data'):
+            record.extra_data = ''
+        elif record.extra_data:
+            # If extra_data is not empty, add a separator
+            record.extra_data = f" | {record.extra_data}"
+        
+        # Add thread name and process ID
+        thread_info = f"[Thread: {record.threadName}]" if hasattr(record, 'threadName') else ''
+        process_info = f"[PID: {record.process}]" if hasattr(record, 'process') else ''
+        
+        # Add function name if available
+        func_info = f"[{record.funcName}]" if hasattr(record, 'funcName') else ''
+        
+        # Add these to record
+        record.thread_process = f"{thread_info}{process_info}"
+        record.function_info = func_info
+        
+        try:
+            return super().format(record)
+        except ValueError as e:
+            # If formatting fails, return a simplified format
+            return f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | {record.levelname} | {record.message}"
+        
+    def formatException(self, ei):
+        """Enhanced exception formatting."""
+        result = super().formatException(ei)
+        return f"\nException Details:\n{result}"
 
 class ExtraDataAdapter(logging.LoggerAdapter):
     """Enhanced adapter to add extra data to log records in a structured way."""
@@ -139,4 +160,4 @@ def log_performance(logger):
                            exc_info=True)
                 raise
         return wrapper
-    return decorator 
+    return decorator
